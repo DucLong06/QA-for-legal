@@ -1,4 +1,19 @@
 import streamlit as st
+import json
+import requests
+API_ENDPOINT = "http://127.0.0.1:8000"
+
+
+def _call_api(imageBase64):
+    payload = json.dumps({"ImageBase64": str(imageBase64)})
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    response = requests.request(
+        "POST", API_ENDPOINT, headers=headers, data=payload)
+    data = response.json()
+    return data
+
 
 with st.sidebar:
     with open(f"how_to_use.md", "r") as f:
