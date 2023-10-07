@@ -1,18 +1,38 @@
 import streamlit as st
 import json
 import requests
-API_ENDPOINT = "http://127.0.0.1:8000"
+from my_models import Question
+from my_env import QUESTION_TYPE
+API_ENDPOINT = "http://127.0.0.1:8000/"
 
+class CustomEncoder(json.JSONEncoder):
+    def encode(self, obj):
+        def fix_none(item):
+            return item if item is not None else "null"
 
-def _call_api(imageBase64):
-    payload = json.dumps({"ImageBase64": str(imageBase64)})
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    response = requests.request(
-        "POST", API_ENDPOINT, headers=headers, data=payload)
-    data = response.json()
-    return data
+        return super().encode(obj, default=fix_none)
+    
+def _call_api(question_input):
+    try:
+        payload = question_input.model_dump()
+        print(json.dumps(payload))
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        response = requests.post(
+            API_ENDPOINT, headers=headers, data=json.dumps(payload))
+
+        # Check for HTTP status code indicating a successful response
+        if response.status_code == 200:
+            data = response.json()
+            return data
+        else:
+            st.error(f"Error: {response.status_code}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error sending request to the server: {e}")
+        return None
 
 
 with st.sidebar:
@@ -34,23 +54,33 @@ t1, t2, t3 = st.tabs(
     ])
 
 
-with t1.form('true_false'):
-    text = st.text_area('Enter Question:')
+with t1.form(QUESTION_TYPE[0]):
+    question = st.text_area('Enter Question:')
     submitted = st.form_submit_button('Submit')
+    question_type = QUESTION_TYPE[0]
     if submitted:
-        import random
-        answser = random.choice(["True", "False"])
-        if answser == "True":
-            st.success("True")
-        else:
-            st.error("False")
-        law_id = 1
-        law = "Luật A"
-        law_text = "Luật abc"
-        with st.expander(f"Căn cứ vào {law} điều:{law_id}"):
-            st.markdown(law_text)
+        question_input = Question(
+            question_type=question_type, question=question)
+        response_data = _call_api(question_input)
+        if response_data is not None:
+            answser = response_data["answer"]
+            law_id = response_data["law_id"]
+            law = response_data["law"]
+            law_text = response_data["law_text"]
 
-with t2.form('options'):
+            if answser == "True":
+                st.success("True")
+            else:
+                st.error("False")
+
+            with st.expander(f"Base on: {law}Article:{law_id}"):
+                st.markdown(law_text)
+        else:
+            st.warning(
+                "There was an issue with the server or API call. Please try again later.")
+
+
+with t2.form(QUESTION_TYPE[1]):
     text = st.text_area('Enter Question:')
     option_a = st.text_input('Option A:')
     option_b = st.text_input('Option B:')
